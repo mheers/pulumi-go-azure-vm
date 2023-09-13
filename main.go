@@ -36,7 +36,7 @@ func main() {
 			SecurityRules: network.SecurityRuleTypeArray{
 				&network.SecurityRuleTypeArgs{
 					Access:                   pulumi.String("Allow"),
-					Description:              pulumi.String("Default SCF Rule deny hubspace inbound"),
+					Description:              pulumi.String("allow-http-inbound"),
 					DestinationAddressPrefix: pulumi.String("*"),
 					DestinationPortRange:     pulumi.String("80"),
 					Direction:                pulumi.String("Inbound"),
@@ -52,7 +52,7 @@ func main() {
 				},
 				&network.SecurityRuleTypeArgs{
 					Access:                   pulumi.String("Allow"),
-					Description:              pulumi.String("Default SCF Rule deny hubspace inbound"),
+					Description:              pulumi.String("allow-ssh-inbound"),
 					DestinationAddressPrefix: pulumi.String("*"),
 					DestinationPortRange:     pulumi.String("1988"),
 					Direction:                pulumi.String("Inbound"),
