@@ -194,6 +194,179 @@ systemctl restart sshd
 		ctx.Export("vm IP public", publicIp.IpAddress)
 		ctx.Export("vm IP private", nic.IpConfigurations.Index(pulumi.Int(0)).PrivateIPAddress())
 
+		// Create an Azure Network Security Group for Bastion host
+		nsgBastion, err := network.NewNetworkSecurityGroup(ctx, "nsgBastion", &network.NetworkSecurityGroupArgs{
+			ResourceGroupName: resourceGroup.Name,
+			SecurityRules: network.SecurityRuleTypeArray{
+				// ingress
+				&network.SecurityRuleTypeArgs{
+					Access:                   pulumi.String("Allow"),
+					Description:              pulumi.String("Default SCF Rule deny hubspace inbound"),
+					DestinationAddressPrefix: pulumi.String("*"),
+					DestinationPortRange:     pulumi.String("443"),
+					Direction:                pulumi.String("Inbound"),
+					Name:                     pulumi.String("AllowHttpsInbound"),
+					Priority:                 pulumi.Int(120),
+					Protocol:                 pulumi.String("TCP"),
+					SourceAddressPrefix:      pulumi.String("Internet"),
+					SourcePortRange:          pulumi.String("*"),
+					Type:                     pulumi.String("Microsoft.Network/networkSecurityGroups/securityRules"),
+				},
+				&network.SecurityRuleTypeArgs{
+					Access:                   pulumi.String("Allow"),
+					Description:              pulumi.String("Default SCF Rule deny hubspace inbound"),
+					DestinationAddressPrefix: pulumi.String("*"),
+					DestinationPortRange:     pulumi.String("443"),
+					Direction:                pulumi.String("Inbound"),
+					Name:                     pulumi.String("AllowGatewayManagerInbound"),
+					Priority:                 pulumi.Int(130),
+					Protocol:                 pulumi.String("TCP"),
+					SourceAddressPrefix:      pulumi.String("GatewayManager"),
+					SourcePortRange:          pulumi.String("*"),
+					Type:                     pulumi.String("Microsoft.Network/networkSecurityGroups/securityRules"),
+				},
+				&network.SecurityRuleTypeArgs{
+					Access:                   pulumi.String("Allow"),
+					Description:              pulumi.String("Default SCF Rule deny hubspace inbound"),
+					DestinationAddressPrefix: pulumi.String("*"),
+					DestinationPortRange:     pulumi.String("443"),
+					Direction:                pulumi.String("Inbound"),
+					Name:                     pulumi.String("AllowAzureLoadBalancerInbound"),
+					Priority:                 pulumi.Int(140),
+					Protocol:                 pulumi.String("TCP"),
+					SourceAddressPrefix:      pulumi.String("AzureLoadBalancer"),
+					SourcePortRange:          pulumi.String("*"),
+					Type:                     pulumi.String("Microsoft.Network/networkSecurityGroups/securityRules"),
+				},
+				&network.SecurityRuleTypeArgs{
+					Access:                   pulumi.String("Allow"),
+					Description:              pulumi.String("Default SCF Rule deny hubspace inbound"),
+					DestinationAddressPrefix: pulumi.String("*"),
+					DestinationPortRanges:    pulumi.ToStringArray([]string{"8080", "5701"}),
+					Direction:                pulumi.String("Inbound"),
+					Name:                     pulumi.String("AllowBastionHostCommunication"),
+					Priority:                 pulumi.Int(150),
+					Protocol:                 pulumi.String("*"),
+					SourceAddressPrefix:      pulumi.String("VirtualNetwork"),
+					SourcePortRange:          pulumi.String("*"),
+					Type:                     pulumi.String("Microsoft.Network/networkSecurityGroups/securityRules"),
+				},
+
+				// egress
+				&network.SecurityRuleTypeArgs{
+					Access:                   pulumi.String("Allow"),
+					Description:              pulumi.String("Default SCF Rule deny hubspace inbound"),
+					DestinationAddressPrefix: pulumi.String("VirtualNetwork"),
+					DestinationPortRanges:    pulumi.ToStringArray([]string{"22", "3389"}),
+					Direction:                pulumi.String("Outbound"),
+					Name:                     pulumi.String("AllowSshRdpOutbound"),
+					Priority:                 pulumi.Int(100),
+					Protocol:                 pulumi.String("*"),
+					SourceAddressPrefix:      pulumi.String("*"),
+					SourcePortRange:          pulumi.String("*"),
+					Type:                     pulumi.String("Microsoft.Network/networkSecurityGroups/securityRules"),
+				},
+				&network.SecurityRuleTypeArgs{
+					Access:                   pulumi.String("Allow"),
+					Description:              pulumi.String("Default SCF Rule deny hubspace inbound"),
+					DestinationAddressPrefix: pulumi.String("AzureCloud"),
+					DestinationPortRange:     pulumi.String("443"),
+					Direction:                pulumi.String("Outbound"),
+					Name:                     pulumi.String("AllowAzureCloudOutbound"),
+					Priority:                 pulumi.Int(110),
+					Protocol:                 pulumi.String("TCP"),
+					SourceAddressPrefix:      pulumi.String("*"),
+					SourcePortRange:          pulumi.String("*"),
+					Type:                     pulumi.String("Microsoft.Network/networkSecurityGroups/securityRules"),
+				},
+				&network.SecurityRuleTypeArgs{
+					Access:                   pulumi.String("Allow"),
+					Description:              pulumi.String("Default SCF Rule deny hubspace inbound"),
+					DestinationAddressPrefix: pulumi.String("VirtualNetwork"),
+					DestinationPortRanges:    pulumi.ToStringArray([]string{"8080", "5701"}),
+					Direction:                pulumi.String("Outbound"),
+					Name:                     pulumi.String("AllowBastionCommunication"),
+					Priority:                 pulumi.Int(120),
+					Protocol:                 pulumi.String("*"),
+					SourceAddressPrefix:      pulumi.String("VirtualNetwork"),
+					SourcePortRange:          pulumi.String("*"),
+					Type:                     pulumi.String("Microsoft.Network/networkSecurityGroups/securityRules"),
+				},
+				&network.SecurityRuleTypeArgs{
+					Access:                   pulumi.String("Allow"),
+					Description:              pulumi.String("Default SCF Rule deny hubspace inbound"),
+					DestinationAddressPrefix: pulumi.String("Internet"),
+					DestinationPortRange:     pulumi.String("80"),
+					Direction:                pulumi.String("Outbound"),
+					Name:                     pulumi.String("AllowHttpOutbound"),
+					Priority:                 pulumi.Int(130),
+					Protocol:                 pulumi.String("*"),
+					SourceAddressPrefix:      pulumi.String("*"),
+					SourcePortRange:          pulumi.String("*"),
+					Type:                     pulumi.String("Microsoft.Network/networkSecurityGroups/securityRules"),
+				},
+			},
+		},
+			pulumi.DependsOn([]pulumi.Resource{resourceGroup}),
+		)
+		if err != nil {
+			return err
+		}
+
+		// Create an Azure Subnet for Bastion host
+		subnetBastion, err := network.NewSubnet(ctx, "subnetBastion", &network.SubnetArgs{
+			SubnetName:         pulumi.String("AzureBastionSubnet"),
+			ResourceGroupName:  resourceGroup.Name,
+			VirtualNetworkName: virtualNetwork.Name,
+			AddressPrefix:      pulumi.String("10.0.2.0/26"),
+			NetworkSecurityGroup: network.NetworkSecurityGroupTypeArgs{
+				Id: nsgBastion.ID(),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// Create an Azure Public IP Address for Bastion host
+		publicIpBastion, err := network.NewPublicIPAddress(ctx, "publicIPBastion", &network.PublicIPAddressArgs{
+			ResourceGroupName:        resourceGroup.Name,
+			PublicIpAddressName:      pulumi.String("publicipBastion"),
+			PublicIPAllocationMethod: pulumi.String("Static"),
+			Sku: network.PublicIPAddressSkuArgs{
+				Name: pulumi.String("Standard"),
+				Tier: pulumi.String("Regional"),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// Create a Bastion host
+		bastion, err := network.NewBastionHost(ctx, "bastionHost", &network.BastionHostArgs{
+			ResourceGroupName: resourceGroup.Name,
+			BastionHostName:   pulumi.String("bastionhosttenant"),
+			Sku: network.SkuArgs{
+				Name: pulumi.String("Basic"),
+			},
+			IpConfigurations: network.BastionHostIPConfigurationArray{
+				network.BastionHostIPConfigurationArgs{
+					Name: pulumi.String("bastionHostIpConfiguration"),
+					Subnet: network.SubResourceArgs{
+						Id: subnetBastion.ID(),
+					},
+					PublicIPAddress: network.SubResourceArgs{
+						Id: publicIpBastion.ID(),
+					},
+				},
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		ctx.Export("bastion", bastion.Name)
+		ctx.Export("bastion IP public", publicIpBastion.IpAddress)
+
 		return nil
 	})
 }
